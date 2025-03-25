@@ -8,11 +8,13 @@ import java.util.regex.Pattern;
 /**
  * @author Marc A Suchard
  * @author Benjamin Viernes
+ * @author Bhavani Tirupati
  */
 
 public class SqlCteRefactor {
 
-	private static final String POST_APPEND = "\n-- Refactored by SqlCteRefactor\n";
+	private static final String NEW_LINE = "\n";
+	private static final String POST_APPEND = NEW_LINE + "-- Refactored by SqlCteRefactor" + NEW_LINE;
 
 	public static String translateToCustomVaSql(String sql) {
 
@@ -49,13 +51,12 @@ public class SqlCteRefactor {
 		String firstSqlSegment = sql.substring(0, firstConceptSetEnd);
 
 		StringBuilder newSql = new StringBuilder(firstSqlSegment)
-			.append("\r\n CREATE CLUSTERED COLUMNSTORE INDEX idx ON #Codesets;");
+			.append(NEW_LINE + " CREATE CLUSTERED COLUMNSTORE INDEX idx ON #Codesets;");
 
 		for (TempTable table : uniqueTables) {
-			newSql.append("\r\n").append(table.getNewQuery());
+			newSql.append(NEW_LINE).append(table.getNewQuery());
 		}
-		newSql.append("\r\n");
-
+		newSql.append(NEW_LINE);
 		int currentStart = firstConceptSetEnd;
 		for (int i = 0; i < locations.size(); ++i) {
 			SqlLocation loc = locations.get(i);
@@ -64,7 +65,7 @@ public class SqlCteRefactor {
 			newSql.append(sql, currentStart, loc.getStart()).append(replaceQuery);
 
 			if (i < locations.size() - 1) {
-				newSql.append("\r\n"); // TODO VaTools output is inconsistent
+				newSql.append(NEW_LINE); // TODO VaTools output is inconsistent
 			}
 
 			currentStart = loc.getEnd();
@@ -75,19 +76,19 @@ public class SqlCteRefactor {
 		// Delete tables at end
 		newSql.append(" "); // TODO VaTools output is inconsistent
 
-		newSql.append("\n-- DELETE TEMP TABLES");
+		newSql.append(NEW_LINE + "-- DELETE TEMP TABLES");
 
 		boolean first = true;
 		for (TempTable table : uniqueTables) {
-			newSql.append("\n");
+			newSql.append(NEW_LINE);
 
 			if (first) {
 				newSql.append(" "); // TODO VaTools output is inconsistent
 				first = false;
 			}
 
-			newSql.append("TRUNCATE TABLE ").append(table.getName()).append(";\n")
-				.append("DROP TABLE ").append(table.getName()).append(";\n");
+			newSql.append("TRUNCATE TABLE ").append(table.getName()).append(";" + NEW_LINE)
+				.append("DROP TABLE ").append(table.getName()).append(";" + NEW_LINE);
 		}
 		
 		return newSql + POST_APPEND;
@@ -111,12 +112,13 @@ public class SqlCteRefactor {
 					if (mapPartialNameToCount.containsKey(tableSubName)) {
 						Integer count = mapPartialNameToCount.get(tableSubName);
 						count++;
+						mapPartialNameToCount.put(tableSubName, count); // replace value in hash-map (fix)
 						name = tableSubName + "_" + count;
 					} else {
 						mapPartialNameToCount.put(tableSubName, 1);
 						name = tableSubName + "_" + 1;
-						mapQueryToPartialName.put(loc.getQuery(), name);
 					}
+					mapQueryToPartialName.put(loc.getQuery(), name); // remember to cache all unique queries (fix)
 					uniqueTables.add(new TempTable(name, loc.getQuery()));
 				} else {
 					name = mapQueryToPartialName.get(loc.getQuery());
@@ -189,10 +191,10 @@ public class SqlCteRefactor {
 			int firstFrom = originalQuery.toLowerCase().indexOf("from");
 			int endCrit = originalQuery.indexOf("-- End");
 			return originalQuery.substring(0, firstFrom) +
-				"INTO " + name + "\r\n" +
+				"INTO " + name + NEW_LINE +
 				originalQuery.substring(firstFrom, endCrit) +
-				";\r\n CREATE CLUSTERED COLUMNSTORE INDEX idx ON " +
-				name + ";\r\n" +
+				";" + NEW_LINE + " CREATE CLUSTERED COLUMNSTORE INDEX idx ON " +
+				name + ";" + NEW_LINE +
 				originalQuery.substring(endCrit);
 		}
 	}
@@ -204,7 +206,6 @@ public class SqlCteRefactor {
 		private final String query;
 
 		private String name;
-		private int id;
 
 		public SqlLocation(String domain, int start, int end, String query) {
 			this.domain = domain;
@@ -225,15 +226,7 @@ public class SqlCteRefactor {
 		public int getEnd() {
 			return end;
 		}
-
-		public int getCriterionId() {
-			return id;
-		}
-
-		public void setCriterionId(int i) {
-			id = i;
-		}
-
+		
 		public void setName(String str) {
 			name = str;
 		}
