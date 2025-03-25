@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
 
 public class SqlCteRefactor {
 
-	private static final String NEW_LINE = "\n";
+	private static final String NEW_LINE = System.lineSeparator();
 	private static final String POST_APPEND = NEW_LINE + "-- Refactored by SqlCteRefactor" + NEW_LINE;
 
 	public static String translateToCustomVaSql(String sql) {
