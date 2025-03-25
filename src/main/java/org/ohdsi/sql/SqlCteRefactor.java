@@ -105,28 +105,25 @@ public class SqlCteRefactor {
 
 		for (SqlLocation loc : locations) {
 			Matcher matcher = Pattern.compile("codeset_id =\\s*(\\d+)").matcher(loc.getQuery());
-			if (matcher.find()) {
-				String tableSubName = "#" + loc.getDomain() + "Crit" + matcher.group(1);
-				String name;
-				if (!mapQueryToPartialName.containsKey(loc.getQuery())) {
-					if (mapPartialNameToCount.containsKey(tableSubName)) {
-						Integer count = mapPartialNameToCount.get(tableSubName);
-						count++;
-						mapPartialNameToCount.put(tableSubName, count); // replace value in hash-map (fix)
-						name = tableSubName + "_" + count;
-					} else {
-						mapPartialNameToCount.put(tableSubName, 1);
-						name = tableSubName + "_" + 1;
-					}
-					mapQueryToPartialName.put(loc.getQuery(), name); // remember to cache all unique queries (fix)
-					uniqueTables.add(new TempTable(name, loc.getQuery()));
+			String codeSetId = matcher.find() ? matcher.group(1) : "X";
+			String tableSubName = "#" + loc.getDomain() + "Crit" + codeSetId;
+			String name;
+			if (!mapQueryToPartialName.containsKey(loc.getQuery())) {
+				if (mapPartialNameToCount.containsKey(tableSubName)) {
+					Integer count = mapPartialNameToCount.get(tableSubName);
+					count++;
+					mapPartialNameToCount.put(tableSubName, count); // replace value in hash-map (fix)
+					name = tableSubName + "_" + count;
 				} else {
-					name = mapQueryToPartialName.get(loc.getQuery());
+					mapPartialNameToCount.put(tableSubName, 1);
+					name = tableSubName + "_" + 1;
 				}
-				loc.setName(name);
+				mapQueryToPartialName.put(loc.getQuery(), name); // remember to cache all unique queries (fix)
+				uniqueTables.add(new TempTable(name, loc.getQuery()));
 			} else {
-				throw new RuntimeException("Cannot find codeset_id"); // TODO handle error more gracefully
+				name = mapQueryToPartialName.get(loc.getQuery());
 			}
+			loc.setName(name);
 		}
 		return uniqueTables;
 	}
