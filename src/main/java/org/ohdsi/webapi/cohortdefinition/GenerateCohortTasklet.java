@@ -16,6 +16,7 @@
 package org.ohdsi.webapi.cohortdefinition;
 
 import org.ohdsi.circe.helper.ResourceHelper;
+import org.ohdsi.sql.SqlCteRefactor;
 import org.ohdsi.sql.SqlRender;
 import org.ohdsi.sql.SqlSplit;
 import org.ohdsi.sql.SqlTranslate;
@@ -92,6 +93,21 @@ public class GenerateCohortTasklet extends CancelableTasklet implements Stoppabl
         new String[]{ targetSchema, cohortDefinition.getId().toString(), res.getIdentifier().toString() }
     );
     sql = SqlTranslate.translateSql(sql, source.getSourceDialect());
+		if (DO_REFACTOR) {
+			sql = SqlCteRefactor.translateToCustomVaSql(sql);
+		}
     return SqlSplit.splitSql(sql);
   }
+	
+	private static final boolean DO_REFACTOR = true;
+
+//	private static final boolean DO_REFACTOR =
+//		Boolean.getBoolean(getEnvironmentalVariableWithDefault(REFACTOR_VARIABLE_NAME, "true"));
+//
+//	private static String getEnvironmentalVariableWithDefault(String variableName, String defaultValue) {
+//		String value = System.getenv(variableName);
+//		return (value != null) ? value : defaultValue;
+//	}		
+//		
+//	private static final String REFACTOR_VARIABLE_NAME = "do.sql.refactor";
 }

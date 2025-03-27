@@ -51,7 +51,7 @@ public class SqlCteRefactor {
 		String firstSqlSegment = sql.substring(0, firstConceptSetEnd);
 
 		StringBuilder newSql = new StringBuilder(firstSqlSegment)
-			.append(NEW_LINE + " CREATE CLUSTERED COLUMNSTORE INDEX idx ON #Codesets;");
+			.append(NEW_LINE).append(" CREATE CLUSTERED COLUMNSTORE INDEX idx ON #Codesets;");
 
 		for (TempTable table : uniqueTables) {
 			newSql.append(NEW_LINE).append(table.getNewQuery());
@@ -76,7 +76,7 @@ public class SqlCteRefactor {
 		// Delete tables at end
 		newSql.append(" "); // TODO VaTools output is inconsistent
 
-		newSql.append(NEW_LINE + "-- DELETE TEMP TABLES");
+		newSql.append(NEW_LINE).append("-- DELETE TEMP TABLES");
 
 		boolean first = true;
 		for (TempTable table : uniqueTables) {
@@ -87,8 +87,8 @@ public class SqlCteRefactor {
 				first = false;
 			}
 
-			newSql.append("TRUNCATE TABLE ").append(table.getName()).append(";" + NEW_LINE)
-				.append("DROP TABLE ").append(table.getName()).append(";" + NEW_LINE);
+			newSql.append("TRUNCATE TABLE ").append(table.getName()).append(";").append(NEW_LINE)
+				.append("DROP TABLE ").append(table.getName()).append(";").append(NEW_LINE);
 		}
 		
 		return newSql + POST_APPEND;
