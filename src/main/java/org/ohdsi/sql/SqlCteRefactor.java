@@ -5,6 +5,10 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+
 /**
  * @author Marc A Suchard
  * @author Benjamin Viernes
@@ -12,12 +16,15 @@ import java.util.regex.Pattern;
  */
 
 public class SqlCteRefactor {
+        private static final Logger logger = LoggerFactory.getLogger(SqlCteRefactor.class);
 
 	private static final String NEW_LINE = System.lineSeparator();
 	private static final String POST_APPEND = NEW_LINE + "-- Refactored by SqlCteRefactor" + NEW_LINE;
 
 	public static String translateToCustomVaSql(String sql) {
 
+	        logger.info("SqlCteRefactor::translateToCustomVaSql entering method.");
+	        
 		List<DomainCriteria> domainCriteriaList = createDomainCriteria();
 		List<SqlLocation> locations = new ArrayList<>();
 
