@@ -21,6 +21,7 @@ import org.ohdsi.sql.BigQuerySparkTranslate;
 import org.ohdsi.sql.SqlRender;
 import org.ohdsi.sql.SqlSplit;
 import org.ohdsi.sql.SqlTranslate;
+import org.ohdsi.sql.SqlCteRefactor;
 import org.ohdsi.webapi.cohortcharacterization.domain.CcFeAnalysisEntity;
 import org.ohdsi.webapi.cohortcharacterization.domain.CohortCharacterizationEntity;
 import org.ohdsi.webapi.common.generation.CancelableTasklet;
@@ -204,10 +205,44 @@ public class GenerateCohortTasklet extends CancelableTasklet implements Stoppabl
               generationRequestBuilder,
               (resId, sqls) -> generationCacheHelper.runCancelableCohortGeneration(jdbcTemplate, stmtCancel, sqls));
 
-      String sql = SqlRender.renderSql(copyGenerationIntoCohortTableSql,
-              new String[] { RESULTS_DATABASE_SCHEMA, COHORT_DEFINITION_ID, DESIGN_HASH },
-              new String[] { targetSchema, cohortDefinition.getId().toString(), res.getIdentifier().toString() });
-      sql = SqlTranslate.translateSql(sql, source.getSourceDialect());
-      return SqlSplit.splitSql(sql);
+    Map<String, Object> jobParams = chunkContext.getStepContext().getJobParameters();
+
+    Integer cohortDefinitionId = Integer.valueOf(jobParams.get(COHORT_DEFINITION_ID).toString());
+    Integer sourceId = Integer.parseInt(jobParams.get(SOURCE_ID).toString());
+    String targetSchema = jobParams.get(TARGET_DATABASE_SCHEMA).toString();
+    String sessionId = jobParams.getOrDefault(SESSION_ID, SessionUtils.sessionId()).toString();
+
+    CohortDefinition cohortDefinition = cohortDefinitionRepository.findOneWithDetail(cohortDefinitionId);
+    Source source = sourceService.findBySourceId(sourceId);
+
+    CohortGenerationRequestBuilder generationRequestBuilder = new CohortGenerationRequestBuilder(
+        sessionId,
+        targetSchema
+    );
+
+    int designHash = this.generationCacheHelper.computeHash(cohortDefinition.getDetails().getExpression());
+    CohortGenerationUtils.insertInclusionRules(cohortDefinition, source, designHash, targetSchema, sessionId, jdbcTemplate);
+    
+    GenerationCacheHelper.CacheResult res = generationCacheHelper.computeCacheIfAbsent(
+        cohortDefinition,
+        source,
+        generationRequestBuilder,
+        (resId, sqls) -> generationCacheHelper.runCancelableCohortGeneration(jdbcTemplate, stmtCancel, sqls)
+    );
+
+    String sql = SqlRender.renderSql(
+        copyGenerationIntoCohortTableSql,
+        new String[]{ RESULTS_DATABASE_SCHEMA, COHORT_DEFINITION_ID, DESIGN_HASH },
+        new String[]{ targetSchema, cohortDefinition.getId().toString(), res.getIdentifier().toString() }
+    );
+    sql = SqlTranslate.translateSql(sql, source.getSourceDialect());
+		if (DO_REFACTOR) {
+		        this.log.info("GenerateCohortTasklet::generationRequestBuilder calling translateToCustomVaSql");
+			sql = SqlCteRefactor.translateToCustomVaSql(sql);
+			this.log.info("GenerateCohortTasklet::generationRequestBuilder translateToCustomVaSql returned. New SQL:\n\n" + sql + "\n\n");	      
+		}
+    return SqlSplit.splitSql(sql);
   }
+	
+	private static final boolean DO_REFACTOR = true;
 }
