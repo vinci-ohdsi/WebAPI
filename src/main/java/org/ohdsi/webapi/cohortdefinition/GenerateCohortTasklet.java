@@ -205,30 +205,6 @@ public class GenerateCohortTasklet extends CancelableTasklet implements Stoppabl
               generationRequestBuilder,
               (resId, sqls) -> generationCacheHelper.runCancelableCohortGeneration(jdbcTemplate, stmtCancel, sqls));
 
-    Map<String, Object> jobParams = chunkContext.getStepContext().getJobParameters();
-
-    Integer cohortDefinitionId = Integer.valueOf(jobParams.get(COHORT_DEFINITION_ID).toString());
-    Integer sourceId = Integer.parseInt(jobParams.get(SOURCE_ID).toString());
-    String targetSchema = jobParams.get(TARGET_DATABASE_SCHEMA).toString();
-    String sessionId = jobParams.getOrDefault(SESSION_ID, SessionUtils.sessionId()).toString();
-
-    CohortDefinition cohortDefinition = cohortDefinitionRepository.findOneWithDetail(cohortDefinitionId);
-    Source source = sourceService.findBySourceId(sourceId);
-
-    CohortGenerationRequestBuilder generationRequestBuilder = new CohortGenerationRequestBuilder(
-        sessionId,
-        targetSchema
-    );
-
-    int designHash = this.generationCacheHelper.computeHash(cohortDefinition.getDetails().getExpression());
-    CohortGenerationUtils.insertInclusionRules(cohortDefinition, source, designHash, targetSchema, sessionId, jdbcTemplate);
-    
-    GenerationCacheHelper.CacheResult res = generationCacheHelper.computeCacheIfAbsent(
-        cohortDefinition,
-        source,
-        generationRequestBuilder,
-        (resId, sqls) -> generationCacheHelper.runCancelableCohortGeneration(jdbcTemplate, stmtCancel, sqls)
-    );
 
     String sql = SqlRender.renderSql(
         copyGenerationIntoCohortTableSql,
