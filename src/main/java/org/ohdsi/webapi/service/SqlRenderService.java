@@ -20,6 +20,9 @@ import org.ohdsi.webapi.util.SessionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
+
 /**
  *
  * @author Lee Evans
@@ -28,6 +31,14 @@ import org.slf4j.LoggerFactory;
 public class SqlRenderService {
     // Create a logger instance for this class
     private static final Logger logger = LoggerFactory.getLogger(SqlRenderService.class);
+
+    @Value("${generation.cteRefactor}")
+    private boolean cteRefactor;
+    private static boolean staticCteRefactor;
+    @PostConstruct
+    public void init() { // necessary b/c the method where this will be used is static
+	staticCteRefactor = cteRefactor;
+    }
     
     /**
      * Translate an OHDSI SQL to a supported target SQL dialect
@@ -89,7 +100,7 @@ public class SqlRenderService {
         if (StringUtils.isEmpty(sourceStatement.getTargetDialect()) || DEFAULT_DIALECT.equals(sourceStatement.getTargetDialect())) {
 	    logger.info("SqlRenderService::translateSql(SourceStatement sourceStatement, String renderedSQL) - condition regarding getTargetDialect (" + sourceStatement.getTargetDialect() + ") found to be True.");
 	    if(DEFAULT_DIALECT.equals(sourceStatement.getTargetDialect())){ // implies "sql server" is the dialect
-		if (DO_REFACTOR) {
+		if (staticCteRefactor) {
 		    logger.info("SqlRenderService::translateSql calling translateToCustomVaSql");
 		    renderedSQL = SqlCteRefactor.translateToCustomVaSql(renderedSQL);
 		    logger.info("SqlRenderService::translateSql translateToCustomVaSql returned. New SQL:\n\n" + renderedSQL + "\n\n");
@@ -101,7 +112,7 @@ public class SqlRenderService {
 	String sql = SqlTranslate.translateSql(renderedSQL, sourceStatement.getTargetDialect(), SessionUtils.sessionId(), sourceStatement.getOracleTempSchema());
 
 	if(DEFAULT_DIALECT.equals(sourceStatement.getTargetDialect())){ // implies "sql server" is the dialect
-	    if (DO_REFACTOR) {
+	    if (staticCteRefactor) {
 		logger.info("SqlRenderService::translateSql calling translateToCustomVaSql");
 		sql = SqlCteRefactor.translateToCustomVaSql(sql);
 		logger.info("SqlRenderService::translateSql translateToCustomVaSql returned. New SQL:\n\n" + sql + "\n\n");
@@ -109,5 +120,4 @@ public class SqlRenderService {
 	}
         return sql;
     }
-    private static final boolean DO_REFACTOR = true;
 }

@@ -1,9 +1,12 @@
 package org.ohdsi.webapi.cohortdefinition;
 
+import static org.ohdsi.webapi.Constants.DEFAULT_DIALECT;
+
 import org.apache.commons.lang3.StringUtils;
 
 import org.ohdsi.circe.cohortdefinition.CohortExpressionQueryBuilder;
 import org.ohdsi.circe.cohortdefinition.InclusionRule;
+import org.ohdsi.sql.SqlCteRefactor;
 import org.ohdsi.sql.SqlRender;
 import org.ohdsi.sql.SqlSplit;
 import org.ohdsi.sql.SqlTranslate;
@@ -11,6 +14,11 @@ import org.ohdsi.webapi.source.Source;
 import org.ohdsi.webapi.util.SourceUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import javax.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -25,7 +33,17 @@ import static org.ohdsi.webapi.Constants.Tables.COHORT_INCLUSION_STATS_CACHE;
 import static org.ohdsi.webapi.Constants.Tables.COHORT_SUMMARY_STATS_CACHE;
 
 public class CohortGenerationUtils {
+  // Create a logger instance for this class
+  private static final Logger logger = LoggerFactory.getLogger(CohortGenerationUtils.class);
 
+  @Value("${generation.cteRefactor}")
+  private boolean cteRefactor;
+  private static boolean staticCteRefactor;
+  @PostConstruct
+  public void init() { // necessary b/c the method where this will be used is static
+    staticCteRefactor = cteRefactor;
+  }
+  
   public static void insertInclusionRules(CohortDefinition cohortDef, Source source, int designHash,
                                           String targetSchema, String sessionId, JdbcTemplate jdbcTemplate) {
     final String oracleTempSchema = SourceUtils.getTempQualifier(source);
@@ -62,7 +80,7 @@ public class CohortGenerationUtils {
 
     final String oracleTempSchema = SourceUtils.getTempQualifier(source);
 
-    String expressionSql = expressionQueryBuilder.buildExpressionQuery(request.getExpression(), options);
+    String expressionSql = expressionQueryBuilder.buildExpressionQuery(request.getExpression(), options);    
     expressionSql = SqlRender.renderSql(
       expressionSql,
       new String[] {"target_cohort_table", 
@@ -89,6 +107,16 @@ public class CohortGenerationUtils {
       new String[]{request.getTargetSchema()}
     );
     String translatedSql = SqlTranslate.translateSql(renderedSql, source.getSourceDialect(), request.getSessionId(), oracleTempSchema);
+
+    if (DEFAULT_DIALECT.equals(source.getSourceDialect())) { // implies "sql server" is the dialect
+      if (staticCteRefactor) {
+	logger.info("CohortGenerationUtils::buildGenerationSql - translatedSQLprior to CTE Translation:\n" + translatedSql + "\n------------------------------------------------------------\n");
+	logger.info("CohortGenerationUtils::buildGenerationSql calling translateToCustomVaSql");
+	translatedSql = SqlCteRefactor.translateToCustomVaSql(translatedSql);
+	logger.info("CohortGenerationUtils::buildGenerationSql translateToCustomVaSql returned. New SQL:\n\n"
+		    + translatedSql + "\n\n");
+      }
+    }
     return SqlSplit.splitSql(translatedSql);
   }
 }

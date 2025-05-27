@@ -28,7 +28,8 @@
 
     <commons-fileupload.version>1.5</commons-fileupload.version>
 
-    <circe.version>1.12.1</circe.version>
+    <!-- <circe.version>1.12.1</circe.version> -->
+    <circe.version>1.13.1</circe.version>
     <jersey.version>2.14</jersey.version>
     <SqlRender.version>1.19.1</SqlRender.version>
     <hive-jdbc.version>3.1.2</hive-jdbc.version>
@@ -193,6 +194,11 @@
     <!-- read permissions to -->
     <security.defaultGlobalReadPermissions>true</security.defaultGlobalReadPermissions>
 
+    <!-- if generation.cteRefactor is set to true then, the CTEs used
+         in Circe-Be cohort definition SQL will be converted to
+         temporary tables that are column-store indexed -->
+    <generation.cteRefactor>false</generation.cteRefactor>
+    
     <!-- EMBEDDED SERVER CONFIGURATION (ServerProperties) -->
     <server.port>8080</server.port>
     <server.ssl.key-store></server.ssl.key-store>
