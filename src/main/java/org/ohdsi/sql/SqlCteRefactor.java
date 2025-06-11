@@ -5,6 +5,9 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * @author Marc A Suchard
  * @author Benjamin Viernes
@@ -12,6 +15,7 @@ import java.util.regex.Pattern;
  */
 
 public class SqlCteRefactor {
+	private static final Logger logger = LoggerFactory.getLogger(SqlCteRefactor.class);
 
 	private static final String NEW_LINE = System.lineSeparator();
 	private static final String POST_APPEND = NEW_LINE + "-- Refactored by SqlCteRefactor" + NEW_LINE;
@@ -20,6 +24,8 @@ public class SqlCteRefactor {
 	
 	public static String runNewCode(String sql) {
 
+		logger.info("SqlCteRefactor::runNewCode entering method.");
+		
 		List<TempTable> uniqueTables = new ArrayList<>();
 		
 		Result result = new Result(sql, Status.INCOMPLETE);
@@ -33,7 +39,7 @@ public class SqlCteRefactor {
 	
 	enum Status {
 		DONE,
-		INCOMPLETE;
+		INCOMPLETE
 	}
 	
 	private static class Result {
@@ -155,6 +161,8 @@ public class SqlCteRefactor {
 	
 	public static String translateToCustomVaSql(String sql) {
 
+		logger.info("SqlCteRefactor::translateToCustomVaSql entering method.");
+		
 		List<MatchCriteria> domainCriteriaList = createDomainCriteria();
 		List<SqlLocation> locations = new ArrayList<>();
 
