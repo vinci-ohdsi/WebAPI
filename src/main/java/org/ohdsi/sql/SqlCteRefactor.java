@@ -32,8 +32,13 @@ public class SqlCteRefactor {
 		
 		Result result = new Result(sql, Status.INCOMPLETE);
 		while (result.status == Status.INCOMPLETE) {
-			result = iterate(result.sql, uniqueTables);
+			result = iterate(result.sql, uniqueTables, Portion.TOP);
 		}
+
+		result = new Result(result.sql, Status.INCOMPLETE);
+		while (result.status == Status.INCOMPLETE) {
+			result = iterate(result.sql, uniqueTables, Portion.BOTTOM);
+		}		
 		
 		return result.sql;
 
@@ -42,6 +47,12 @@ public class SqlCteRefactor {
 	enum Status {
 		DONE,
 		INCOMPLETE
+	}
+	
+	enum Portion {
+		TOP,
+		BOTTOM,
+		ALL
 	}
 	
 	private static class Result {
@@ -54,18 +65,35 @@ public class SqlCteRefactor {
 		}
 	}
 	
-	private static Result iterate(String sql, List<TempTable> uniqueTables) {
+	private static Result iterate(String sql, List<TempTable> uniqueTables, Portion portion) {
 		
 		List<MatchCriteria> criteriaList = createCorrelatedCriteria();
 		List<LocationType> allMatches = new ArrayList<>();
+
+		int lowerLimit = -1;
+		int upperLimit = Integer.MAX_VALUE;
+		String inclusionString = "-- Inclusion Rule Inserts";
+		List<Integer> inclusionPoint = findMatches(sql, inclusionString);
 		
-		List<Integer> endOfRefactor = findMatches(sql, "-- Inclusion Rule");
-		int limit = endOfRefactor.size() > 0 ? endOfRefactor.get(0) : Integer.MAX_VALUE;
+		if (portion == Portion.TOP) {
+			if (inclusionPoint.size() > 0) {
+				upperLimit = inclusionPoint.get(0);
+			}
+		} else if (portion == Portion.BOTTOM) {
+			if (inclusionPoint.size() > 0) {
+				lowerLimit = inclusionPoint.get(0); // + inclusionString.length() + 1;
+			}
+		}
+		
+//		int upperLimit = endOfRefactor.size() > 0 ? endOfRefactor.get(0) : Integer.MAX_VALUE;
+//		upperLimit = Integer.MAX_VALUE;
 		
 		for (MatchCriteria criteria : criteriaList) {
 
-			allMatches.addAll(findMatches(sql, criteria, LocationType.Type.BEGIN, limit));
-			allMatches.addAll(findMatches(sql, criteria, LocationType.Type.END, limit));
+			List<LocationType> tmp = findMatches(sql, criteria, LocationType.Type.BEGIN, lowerLimit, upperLimit);
+			
+			allMatches.addAll(findMatches(sql, criteria, LocationType.Type.BEGIN, lowerLimit, upperLimit));
+			allMatches.addAll(findMatches(sql, criteria, LocationType.Type.END, lowerLimit, upperLimit));
 
 		}
 		
@@ -106,19 +134,28 @@ public class SqlCteRefactor {
 		addUniqueTables(uniqueTables, locations);
 		
 		// Add in new temporary tables
-		int firstConceptSetEnd = sql.indexOf("UPDATE STATISTICS #Codesets;") - 2; // Find end of added tables
+		int startRefactorPoint;
+		if (portion == Portion.BOTTOM) {
+			startRefactorPoint = inclusionPoint.get(0) - 1;
+		} else {
+			startRefactorPoint = sql.indexOf("UPDATE STATISTICS #Codesets;") - 2; // Find end of added tables
+		}
 
-		String firstSqlSegment = sql.substring(0, firstConceptSetEnd);
+		String firstSqlSegment = sql.substring(0, startRefactorPoint);
 
 		StringBuilder newSql = new StringBuilder(firstSqlSegment).append(NEW_LINE);
 		
 		for (TempTable table : uniqueTables) {
+			if (portion == Portion.BOTTOM) {
+//				System.err.println("here");
+			}
 			if (!table.isComplete()) {
+				System.err.println("write: " + table.name);
 				newSql.append(NEW_LINE).append(table.getNewQuery());
 			}
 		}
 		
-		replaceOriginalWithTempTables(sql, locations, firstConceptSetEnd, newSql);
+		replaceOriginalWithTempTables(sql, locations, startRefactorPoint, newSql);
 
 		// Delete tables at end
 		for (TempTable table : uniqueTables) {
@@ -130,7 +167,9 @@ public class SqlCteRefactor {
 			table.markComplete();
 		}
 		
-		return new Result(newSql + POST_APPEND, allMatches.size() <= 2 ? Status.DONE : Status.INCOMPLETE);
+		return new Result(newSql + POST_APPEND, 
+//			allMatches.size() <= 2
+				false ? Status.DONE : Status.INCOMPLETE);
 	}
 
 	private static void replaceOriginalWithTempTables(String sql, 
@@ -326,6 +365,7 @@ public class SqlCteRefactor {
 		
 		public MatchCriteria getCriterion() { return criterion; }
 		
+		@SuppressWarnings("unused")
 		public int getDepth() { return depth; }
 
 		public Type getType() { return type; }
@@ -340,14 +380,21 @@ public class SqlCteRefactor {
 		return positions;
 	}
 	
-	private static List<LocationType> findMatches(String sql, MatchCriteria criterion, LocationType.Type type, int limit) {
+	private static List<LocationType> findMatches(String sql, MatchCriteria criterion, LocationType.Type type,
+																								int lowerLimit,
+																								int upperLimit) {
 		String pattern = type.getPattern(criterion);
 		List<LocationType> positions = new ArrayList<>();
+		int misses = 0;
+		int count = 0;
 		Matcher matcher = Pattern.compile(pattern).matcher(sql);
 		while (matcher.find()) {
+			++count;
 			int start = matcher.start();
-			if (start < limit) {
+			if (start > lowerLimit && start < upperLimit) {
 				positions.add(new LocationType(matcher.start(), criterion, type));
+			} else {
+				++misses;
 			}
 		}
 		return positions;
@@ -357,6 +404,7 @@ public class SqlCteRefactor {
 		return Arrays.asList(
 			new MatchCriteria("PrimaryEvents", "-- Begin Primary Events", "-- End Primary Events"),
 			new MatchCriteria("CorrelatedCriteria", "-- Begin Correlated Criteria", "-- End Correlated Criteria"),
+//			Begin Criteria Group
 			new MatchCriteria("CriteriaGroup", "-- Begin Criteria Group", "-- End Criteria Group")
 		);
 	}
@@ -371,7 +419,8 @@ public class SqlCteRefactor {
 			new MatchCriteria("Visit", "-- Begin Visit Occurrence Criteria", "-- End Visit Occurrence Criteria"),
 			new MatchCriteria("Device", "-- Begin Device Exposure Criteria", "-- End Device Exposure Criteria"),
 			new MatchCriteria("Observation", "-- Begin Observation Criteria", "-- End Observation Criteria"),
-			new MatchCriteria("Procedure", "-- Begin Procedure Occurrence Criteria", "-- End Procedure Occurrence Criteria")
+			new MatchCriteria("Procedure", "-- Begin Procedure Occurrence Criteria",  "-- End Procedure Occurrence Criteria"),
+			new MatchCriteria("Specimen", "-- Begin Specimen Criteria", "-- End Specimen Criteria")
 		);
 	}
 	
@@ -418,7 +467,7 @@ public class SqlCteRefactor {
 			int firstFrom = originalQuery.toLowerCase().indexOf("from");
 			int endCrit = RENAME_TAG ? 
 				originalQuery.indexOf("-- XEnd") :	// TODO update for depth
-				originalQuery.indexOf("-- End");
+				originalQuery.indexOf("-- End"); // TODO why SQL with additional -- Begin / -- End tags breaks! fix.
 			StringBuilder newSql = new StringBuilder(originalQuery.substring(0, firstFrom)).append("INTO ").append(name)
 				.append(NEW_LINE)
 				.append(originalQuery, firstFrom, endCrit)
