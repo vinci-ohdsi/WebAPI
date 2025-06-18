@@ -19,12 +19,12 @@ public class SqlCteRefactor {
 
 	private static final String NEW_LINE = System.lineSeparator();
 	private static final String POST_APPEND = NEW_LINE + "-- Refactored by SqlCteRefactor" + NEW_LINE;
-	private static final boolean ADD_INDICES_DOMAIN = true;
-	private static final boolean ADD_INDICES_CRITERIA = false;
+//	private static final boolean ADD_INDICES_DOMAIN = true;
+//	private static final boolean ADD_INDICES_CRITERIA = false;
 	private static final boolean RENAME_TAG = true;
 	private static final boolean USE_DEPTH = false;
 	
-	public static String runNewCode(String sql) {
+	public static String runNewCode(String sql, SqlRefactorConfig config) {
 
 		logger.info("SqlCteRefactor::runNewCode entering method.");
 		
@@ -32,16 +32,15 @@ public class SqlCteRefactor {
 		
 		Result result = new Result(sql, Status.INCOMPLETE);
 		while (result.status == Status.INCOMPLETE) {
-			result = iterate(result.sql, uniqueTables, Portion.TOP);
+			result = iterate(result.sql, uniqueTables, Portion.TOP, config);
 		}
 
 		result = new Result(result.sql, Status.INCOMPLETE);
 		while (result.status == Status.INCOMPLETE) {
-			result = iterate(result.sql, uniqueTables, Portion.BOTTOM);
+			result = iterate(result.sql, uniqueTables, Portion.BOTTOM, config);
 		}		
 		
 		return result.sql;
-
 	}
 	
 	enum Status {
@@ -65,7 +64,8 @@ public class SqlCteRefactor {
 		}
 	}
 	
-	private static Result iterate(String sql, List<TempTable> uniqueTables, Portion portion) {
+	private static Result iterate(String sql, List<TempTable> uniqueTables, 
+																Portion portion, SqlRefactorConfig config) {
 		
 		List<MatchCriteria> criteriaList = createCorrelatedCriteria();
 		List<LocationType> allMatches = new ArrayList<>();
@@ -85,12 +85,7 @@ public class SqlCteRefactor {
 			}
 		}
 		
-//		int upperLimit = endOfRefactor.size() > 0 ? endOfRefactor.get(0) : Integer.MAX_VALUE;
-//		upperLimit = Integer.MAX_VALUE;
-		
 		for (MatchCriteria criteria : criteriaList) {
-
-			List<LocationType> tmp = findMatches(sql, criteria, LocationType.Type.BEGIN, lowerLimit, upperLimit);
 			
 			allMatches.addAll(findMatches(sql, criteria, LocationType.Type.BEGIN, lowerLimit, upperLimit));
 			allMatches.addAll(findMatches(sql, criteria, LocationType.Type.END, lowerLimit, upperLimit));
@@ -131,7 +126,7 @@ public class SqlCteRefactor {
 
 		locations.sort(Comparator.comparingInt(SqlLocation::getStart));
 
-		addUniqueTables(uniqueTables, locations);
+		addUniqueTables(uniqueTables, locations, config);
 		
 		// Add in new temporary tables
 		int startRefactorPoint;
@@ -139,6 +134,9 @@ public class SqlCteRefactor {
 			startRefactorPoint = inclusionPoint.get(0) - 1;
 		} else {
 			startRefactorPoint = sql.indexOf("UPDATE STATISTICS #Codesets;") - 2; // Find end of added tables
+			if (startRefactorPoint == -3) {
+				startRefactorPoint = sql.indexOf("with primary_events") - 2;
+			}
 		}
 
 		String firstSqlSegment = sql.substring(0, startRefactorPoint);
@@ -146,11 +144,7 @@ public class SqlCteRefactor {
 		StringBuilder newSql = new StringBuilder(firstSqlSegment).append(NEW_LINE);
 		
 		for (TempTable table : uniqueTables) {
-			if (portion == Portion.BOTTOM) {
-//				System.err.println("here");
-			}
 			if (!table.isComplete()) {
-				System.err.println("write: " + table.name);
 				newSql.append(NEW_LINE).append(table.getNewQuery());
 			}
 		}
@@ -168,8 +162,9 @@ public class SqlCteRefactor {
 		}
 		
 		return new Result(newSql + POST_APPEND, 
-//			allMatches.size() <= 2
-				false ? Status.DONE : Status.INCOMPLETE);
+//			allMatches.size() <= 2 ? Status.DONE : Status.INCOMPLETE
+			Status.INCOMPLETE
+		);
 	}
 
 	private static void replaceOriginalWithTempTables(String sql, 
@@ -195,11 +190,19 @@ public class SqlCteRefactor {
 	}
 
 	public static String translateToCustomVaSql2(String sql) {
-		sql = translateToCustomVaSql(sql);
-		return runNewCode(sql);
+		return translateToCustomVaSql2(sql, new RSqlRefactorConfig());
+	}
+
+	public static String translateToCustomVaSql2(String sql, SqlRefactorConfig config) {
+		sql = translateToCustomVaSql(sql, config);
+		return runNewCode(sql, config);
+	}
+
+	public static String translateToCustomVaSql(String sql) {
+		return translateToCustomVaSql(sql, new RSqlRefactorConfig());
 	}
 	
-	public static String translateToCustomVaSql(String sql) {
+	public static String translateToCustomVaSql(String sql, SqlRefactorConfig config) {
 
 		logger.info("SqlCteRefactor::translateToCustomVaSql entering method.");
 		
@@ -228,7 +231,7 @@ public class SqlCteRefactor {
 
 		locations.sort(Comparator.comparingInt(SqlLocation::getStart));
 		
-		List<TempTable> uniqueTables = buildUniqueTables(locations);
+		List<TempTable> uniqueTables = buildUniqueTables(locations, config);
 		
 		// Add in new temporary tables
 		int firstConceptSetEnd = sql.indexOf(";", sql.indexOf(";") + 1) + 1; // Find 2nd ";"
@@ -237,7 +240,7 @@ public class SqlCteRefactor {
 
 		StringBuilder newSql = new StringBuilder(firstSqlSegment).append(NEW_LINE);
 		
-		if (ADD_INDICES_DOMAIN) {
+		if (config.getAddIndicesToDomainCriteria()) {
 			newSql.append("CREATE CLUSTERED COLUMNSTORE INDEX idx ON #Codesets;");
 		}
 
@@ -267,14 +270,15 @@ public class SqlCteRefactor {
 		return newSql + POST_APPEND;
 	}
 	
-	private static void addUniqueTables(List<TempTable> uniqueTables, List<SqlLocation> locations) {
+	private static void addUniqueTables(List<TempTable> uniqueTables, List<SqlLocation> locations,
+																			SqlRefactorConfig config) {
 		
 		for (SqlLocation loc : locations) {
 			TempTable table = find(uniqueTables, loc.getQuery());
 			final String name;
 			if (table == null) {
 				String tableName = "#" + loc.getDomain() + "Crit" + uniqueTables.size();
-				uniqueTables.add(new TempTable(tableName, loc.getQuery(), ADD_INDICES_CRITERIA));
+				uniqueTables.add(new TempTable(tableName, loc.getQuery(), config.getAddIndicesToNestedCriteria()));
 				name = tableName;
 			} else {
 				name = table.getName();
@@ -292,7 +296,7 @@ public class SqlCteRefactor {
 		return null;
 	}
 
-	private static List<TempTable> buildUniqueTables(List<SqlLocation> locations) {
+	private static List<TempTable> buildUniqueTables(List<SqlLocation> locations, SqlRefactorConfig config) {
 
 		Map<String, String> mapQueryToPartialName = new HashMap<>();
 		Map<String, Integer> mapPartialNameToCount = new HashMap<>();
@@ -317,7 +321,7 @@ public class SqlCteRefactor {
 					name = tableSubName + "_" + 1;
 				}
 				mapQueryToPartialName.put(loc.getQuery(), name); // remember to cache all unique queries (fix)
-				uniqueTables.add(new TempTable(name, loc.getQuery(), ADD_INDICES_DOMAIN));
+				uniqueTables.add(new TempTable(name, loc.getQuery(), config.getAddIndicesToNestedCriteria()));
 			} else {
 				name = mapQueryToPartialName.get(loc.getQuery());
 			}
@@ -385,16 +389,11 @@ public class SqlCteRefactor {
 																								int upperLimit) {
 		String pattern = type.getPattern(criterion);
 		List<LocationType> positions = new ArrayList<>();
-		int misses = 0;
-		int count = 0;
 		Matcher matcher = Pattern.compile(pattern).matcher(sql);
 		while (matcher.find()) {
-			++count;
 			int start = matcher.start();
 			if (start > lowerLimit && start < upperLimit) {
 				positions.add(new LocationType(matcher.start(), criterion, type));
-			} else {
-				++misses;
 			}
 		}
 		return positions;
@@ -420,7 +419,8 @@ public class SqlCteRefactor {
 			new MatchCriteria("Device", "-- Begin Device Exposure Criteria", "-- End Device Exposure Criteria"),
 			new MatchCriteria("Observation", "-- Begin Observation Criteria", "-- End Observation Criteria"),
 			new MatchCriteria("Procedure", "-- Begin Procedure Occurrence Criteria",  "-- End Procedure Occurrence Criteria"),
-			new MatchCriteria("Specimen", "-- Begin Specimen Criteria", "-- End Specimen Criteria")
+			new MatchCriteria("Specimen", "-- Begin Specimen Criteria", "-- End Specimen Criteria"),
+			new MatchCriteria("Demographics", "-- Begin Demographic Criteria", "-- End Demographic Criteria")
 		);
 	}
 	
@@ -572,9 +572,11 @@ public class SqlCteRefactor {
 			System.err.println("An error occurred while reading the file: " + e.getMessage());
 			return;
 		}
+		
+		SqlRefactorConfig config = new RSqlRefactorConfig();
 
 		String oldSql = contentBuilder.toString();
-		String newSql = translateToCustomVaSql(oldSql);
+		String newSql = translateToCustomVaSql(oldSql, config);
 
 		try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFileName))) {
 			writer.write(newSql);
@@ -584,7 +586,7 @@ public class SqlCteRefactor {
 		
 		if (args.length == 3) {
 			String outputFileName2 = args[2];
-			String newestSql = runNewCode(newSql);
+			String newestSql = runNewCode(newSql, config);
 			
 			try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFileName2))) {
 				writer.write(newestSql);

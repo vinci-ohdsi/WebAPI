@@ -13,13 +13,12 @@ public class RSqlRefactorConfig  extends SqlRefactorConfig.Base {
 	private final boolean addIndicesToDomainCriteria;
 	private final boolean addIndicesToNestedCriteria;
 	
-	@SuppressWarnings("unused")
 	public RSqlRefactorConfig() {
 		this.refactorDomainCriteria = true;
 		this.refactorNestedCriteria = true;
 		this.refactorPrimaryEvents = true;
 		this.addIndicesToDomainCriteria = true;
-		this.addIndicesToNestedCriteria = true;
+		this.addIndicesToNestedCriteria = false;
 	}
 	
 	public RSqlRefactorConfig(boolean refactorDomainCriteria,
