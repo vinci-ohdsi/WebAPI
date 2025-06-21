@@ -25,11 +25,9 @@ import org.ohdsi.sql.SqlCteRefactor;
 import org.ohdsi.webapi.cohortcharacterization.domain.CcFeAnalysisEntity;
 import org.ohdsi.webapi.cohortcharacterization.domain.CohortCharacterizationEntity;
 import org.ohdsi.webapi.common.generation.CancelableTasklet;
-import org.ohdsi.webapi.common.generation.GenerationUtils;
 import org.ohdsi.webapi.feanalysis.domain.FeAnalysisEntity;
 import org.ohdsi.webapi.feanalysis.repository.FeAnalysisEntityRepository;
 import org.ohdsi.webapi.generationcache.GenerationCacheHelper;
-import org.ohdsi.webapi.shiro.Entities.UserRepository;
 import org.ohdsi.webapi.source.Source;
 import org.ohdsi.webapi.source.SourceService;
 import org.ohdsi.webapi.util.CancelableJdbcTemplate;
@@ -38,7 +36,6 @@ import org.ohdsi.webapi.util.SourceUtils;
 import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.StoppableTasklet;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.google.common.collect.ImmutableList;
@@ -53,6 +50,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.ohdsi.webapi.Constants.Params.*;
+import static org.ohdsi.webapi.Constants.CTE_REFACTOR;
 
 /**
  *
@@ -60,7 +58,7 @@ import static org.ohdsi.webapi.Constants.Params.*;
  */
 public class GenerateCohortTasklet extends CancelableTasklet implements StoppableTasklet {
   private final static String copyGenerationIntoCohortTableSql = ResourceHelper.GetResourceAsString("/resources/cohortdefinition/sql/copyGenerationIntoCohortTableSql.sql");
-
+  
   private final GenerationCacheHelper generationCacheHelper;
   private final CohortDefinitionRepository cohortDefinitionRepository;
   private final SourceService sourceService;
@@ -212,13 +210,12 @@ public class GenerateCohortTasklet extends CancelableTasklet implements Stoppabl
         new String[]{ targetSchema, cohortDefinition.getId().toString(), res.getIdentifier().toString() }
     );
     sql = SqlTranslate.translateSql(sql, source.getSourceDialect());
-		if (DO_REFACTOR) {
-			this.log.info("GenerateCohortTasklet::generationRequestBuilder calling translateToCustomVaSql");
+    if (CTE_REFACTOR.equals("true")) {
+      this.log.info("GenerateCohortTasklet::generationRequestBuilder calling translateToCustomVaSql");
 			sql = SqlCteRefactor.translateToCustomVaSql2(sql);
 			this.log.info("GenerateCohortTasklet::generationRequestBuilder translateToCustomVaSql returned. New SQL:\n\n" + sql + "\n\n");	      
-		}
+    }
     return SqlSplit.splitSql(sql);
   }
 	
-  private static final boolean DO_REFACTOR = true;
 }

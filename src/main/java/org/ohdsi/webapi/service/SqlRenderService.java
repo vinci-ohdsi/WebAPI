@@ -1,6 +1,8 @@
 package org.ohdsi.webapi.service;
 
 import static org.ohdsi.webapi.Constants.DEFAULT_DIALECT;
+import static org.ohdsi.webapi.Constants.CTE_REFACTOR;
+
 import static org.ohdsi.webapi.Constants.SqlSchemaPlaceholders.TEMP_DATABASE_SCHEMA_PLACEHOLDER;
 
 import java.util.Collections;
@@ -29,7 +31,7 @@ import org.slf4j.LoggerFactory;
 public class SqlRenderService {
     // Create a logger instance for this classAdd commentMore actions
     private static final Logger logger = LoggerFactory.getLogger(SqlRenderService.class);
-    
+     
     /**
      * Translate an OHDSI SQL to a supported target SQL dialect
      * @param sourceStatement JSON with parameters, source SQL, and target dialect
@@ -84,21 +86,15 @@ public class SqlRenderService {
     }
 
     private static String translateSql(SourceStatement sourceStatement, String renderedSQL) {
-        if (StringUtils.isEmpty(sourceStatement.getTargetDialect()) || DEFAULT_DIALECT.equals(sourceStatement.getTargetDialect())) {
-	    logger.info("SqlRenderService::translateSql(SourceStatement sourceStatement, String renderedSQL) - condition regarding getTargetDialect (" + sourceStatement.getTargetDialect() + ") found to be True.");
-	    if(DEFAULT_DIALECT.equals(sourceStatement.getTargetDialect())){ // implies "sql server" is the dialect
-		if (DO_REFACTOR) {
-		    logger.info("SqlRenderService::translateSql calling translateToCustomVaSql");
-		    renderedSQL = SqlCteRefactor.translateToCustomVaSql2(renderedSQL);
-		    logger.info("SqlRenderService::translateSql translateToCustomVaSql returned. New SQL:\n\n" + renderedSQL + "\n\n");
-		}		
-	    } 
+        if (StringUtils.isEmpty(sourceStatement.getTargetDialect()) && !DEFAULT_DIALECT.equals(sourceStatement.getTargetDialect())) {
+	  logger.info("SqlRenderService::translateSql returning renderedSQL directly without CTE translation because sourceStatement.getTargetDialect() is empty or is not equal to the DEFAULT_DIALECT");
             return renderedSQL;
         }
+	
 	String sql = SqlTranslate.translateSql(renderedSQL, sourceStatement.getTargetDialect(), SessionUtils.sessionId(), sourceStatement.getOracleTempSchema());
 
 	if(DEFAULT_DIALECT.equals(sourceStatement.getTargetDialect())){ // implies "sql server" is the dialect
-	    if (DO_REFACTOR) {
+	  if (CTE_REFACTOR.equals("true")) {
 		logger.info("SqlRenderService::translateSql calling translateToCustomVaSql");
 		sql = SqlCteRefactor.translateToCustomVaSql2(sql);
 		logger.info("SqlRenderService::translateSql translateToCustomVaSql returned. New SQL:\n\n" + sql + "\n\n");
@@ -106,5 +102,4 @@ public class SqlRenderService {
 	}
         return sql;
     }
-    private static final boolean DO_REFACTOR = true;
 }

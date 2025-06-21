@@ -23,6 +23,8 @@ public interface Constants {
   String TEMP_COHORT_TABLE_PREFIX = "temp_cohort_";
   Float DEFAULT_THRESHOLD = 0.01f;
 
+  String CTE_REFACTOR = "true";
+  
   ImmutableList<String> ALLOWED_JOB_EXECUTION_PARAMETERS = ImmutableList.of(
           "jobName",
           "jobAuthor",
