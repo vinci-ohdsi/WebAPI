@@ -306,6 +306,13 @@
 
     <!-- Shiny -->
     <shiny.enabled>false</shiny.enabled>
+
+    <!-- SQL refactoring settings -->
+    <vinci.refactorDomainCriteria>true</vinci.refactorDomainCriteria>
+    <vinci.refactorNestedCriteria>true</vinci.refactorNestedCriteria>
+    <vinci.refactorPrimaryEvents>true</vinci.refactorPrimaryEvents>
+    <vinci.addIndicesToDomainCriteria>false</vinci.addIndicesToDomainCriteria>
+    <vinci.addIndicesToNestedCriteria>false</vinci.addIndicesToNestedCriteria>
   </properties>
 
   <build>
@@ -1330,6 +1337,11 @@
         <security.db.datasource.password>${datasource.password}</security.db.datasource.password>
         <security.db.datasource.authenticationQuery>select password from ${security.db.datasource.schema}.users_data where \
           lower(email) = lower(?)</security.db.datasource.authenticationQuery>
+	<vinci.refactorDomainCriteria>true</vinci.refactorDomainCriteria>
+        <vinci.refactorNestedCriteria>true</vinci.refactorNestedCriteria>
+        <vinci.refactorPrimaryEvents>true</vinci.refactorPrimaryEvents>
+        <vinci.addIndicesToDomainCriteria>false</vinci.addIndicesToDomainCriteria>
+        <vinci.addIndicesToNestedCriteria>false</vinci.addIndicesToNestedCriteria>
       </properties>
     </profile>
     <profile>
@@ -1399,7 +1411,7 @@
         <security.db.datasource.username>${datasource.username}</security.db.datasource.username>
         <security.db.datasource.password>${datasource.password}</security.db.datasource.password>
         <security.db.datasource.authenticationQuery>select password from ${security.db.datasource.schema}.user where \
-          lower(email) = lower(?)</security.db.datasource.authenticationQuery>
+        lower(email) = lower(?)</security.db.datasource.authenticationQuery>
       </properties>
     </profile>
     <profile>

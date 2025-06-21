@@ -190,7 +190,7 @@ public class SqlCteRefactor {
 	}
 
 	public static String translateToCustomVaSql2(String sql) {
-		return translateToCustomVaSql2(sql, new RSqlRefactorConfig());
+	  return translateToCustomVaSql2(sql, new SpringSqlRefactorConfig());  // was RSqlRefactorConfig but changed to SpringSqlRefactorConfig so that this can come in from settings.xml
 	}
 
 	public static String translateToCustomVaSql2(String sql, SqlRefactorConfig config) {
