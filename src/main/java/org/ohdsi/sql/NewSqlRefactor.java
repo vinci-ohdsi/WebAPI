@@ -46,6 +46,16 @@ public class NewSqlRefactor {
 		}
 		return refactoredSql;
 	}
+
+	@SuppressWarnings("unused")
+	public static String translateToCustomVaSql(String sql) {
+		return translateToCustomVaSql(sql, new RSqlRefactorConfig());
+	}
+
+	public static String translateToCustomVaSql(String sql, SqlRefactorConfig config) {
+		NewSqlRefactor refactor = new NewSqlRefactor(sql, config);
+		return refactor.getRefactoredSql();
+	}
 	
 	private String processSql() {
 
