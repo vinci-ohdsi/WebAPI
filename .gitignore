@@ -21,3 +21,7 @@ sandbox/
 **/resources/config/application*-dev-*.yml
 /.vscode
 /.run
+
+how_to.md
+extra/
+*.class
