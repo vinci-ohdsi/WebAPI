@@ -420,6 +420,7 @@ public class SqlCteRefactor {
 			new MatchCriteria("Observation", "-- Begin Observation Criteria", "-- End Observation Criteria"),
 			new MatchCriteria("Procedure", "-- Begin Procedure Occurrence Criteria",  "-- End Procedure Occurrence Criteria"),
 			new MatchCriteria("Specimen", "-- Begin Specimen Criteria", "-- End Specimen Criteria"),
+			new MatchCriteria("Location", "-- Begin Location region Criteria", "-- End Location region Criteria"),
 			new MatchCriteria("Demographics", "-- Begin Demographic Criteria", "-- End Demographic Criteria")
 		);
 	}

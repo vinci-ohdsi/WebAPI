@@ -66,8 +66,11 @@ public class NewSqlRefactor {
 		// Split into execution lines and process
 		String[] lines = originalSql.split(";");
 		for (int i = 0; i < lines.length; ++i) {
-			String result = processLine(lines[i], i);
-			sb.append(result);
+			String line = stripWhiteSpaces(lines[i]);
+			if (!line.equals("")) {
+				String result = processLine(line, i);
+				sb.append(result);
+			}
 		}
 
 		// Delete temp tables at end
@@ -83,8 +86,7 @@ public class NewSqlRefactor {
 	private String processLine(String line, int number) {
 		
 		String lineNumber = "(" + (number + 1) + ")";
-		
-		line = stripWhiteSpaces(line) + ";";
+		line = line + ";";
 		
 		Result result = new Result(line, Status.INCOMPLETE);
 		while (result.status == Status.INCOMPLETE) {
@@ -311,6 +313,7 @@ public class NewSqlRefactor {
 			new MatchCriteria("Observation", "-- Begin Observation Criteria", "-- End Observation Criteria"),
 			new MatchCriteria("Procedure", "-- Begin Procedure Occurrence Criteria",  "-- End Procedure Occurrence Criteria"),
 			new MatchCriteria("Specimen", "-- Begin Specimen Criteria", "-- End Specimen Criteria"),
+			new MatchCriteria("Location", "-- Begin Location region Criteria", "-- End Location region Criteria"),
 			new MatchCriteria("Demographics", "-- Begin Demographic Criteria", "-- End Demographic Criteria")
 		);
 	}
