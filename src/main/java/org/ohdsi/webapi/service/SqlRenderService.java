@@ -96,7 +96,7 @@ public class SqlRenderService {
 	if(DEFAULT_DIALECT.equals(sourceStatement.getTargetDialect())){ // implies "sql server" is the dialect
 	  if (CTE_REFACTOR.equals("true")) {
 		logger.info("SqlRenderService::translateSql calling translateToCustomVaSql");
-		sql = SqlCteRefactor.translateToCustomVaSql2(sql);
+		sql = SqlCteRefactor.translateToCustomVaSql(sql);
 		logger.info("SqlRenderService::translateSql translateToCustomVaSql returned. New SQL:\n\n" + sql + "\n\n");
 	    }
 	}

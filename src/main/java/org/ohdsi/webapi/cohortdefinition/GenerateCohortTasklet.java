@@ -212,7 +212,7 @@ public class GenerateCohortTasklet extends CancelableTasklet implements Stoppabl
     sql = SqlTranslate.translateSql(sql, source.getSourceDialect());
     if (CTE_REFACTOR.equals("true")) {
       this.log.info("GenerateCohortTasklet::generationRequestBuilder calling translateToCustomVaSql");
-			sql = SqlCteRefactor.translateToCustomVaSql2(sql);
+			sql = SqlCteRefactor.translateToCustomVaSql(sql);
 			this.log.info("GenerateCohortTasklet::generationRequestBuilder translateToCustomVaSql returned. New SQL:\n\n" + sql + "\n\n");	      
     }
     return SqlSplit.splitSql(sql);

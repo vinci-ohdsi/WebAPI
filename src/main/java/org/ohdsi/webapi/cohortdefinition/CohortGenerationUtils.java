@@ -103,7 +103,7 @@ public class CohortGenerationUtils {
       if (CTE_REFACTOR.equals("true")) {
 	logger.info("CohortGenerationUtils::buildGenerationSql - translatedSQLprior to CTE Translation:\n" + translatedSql + "\n------------------------------------------------------------\n");
 	logger.info("CohortGenerationUtils::buildGenerationSql calling translateToCustomVaSql");
-	translatedSql = SqlCteRefactor.translateToCustomVaSql2(translatedSql);
+	translatedSql = SqlCteRefactor.translateToCustomVaSql(translatedSql);
 	logger.info("CohortGenerationUtils::buildGenerationSql translateToCustomVaSql returned. New SQL:\n\n"
 		    + translatedSql + "\n\n");
       }
