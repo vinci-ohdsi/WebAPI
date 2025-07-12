@@ -359,10 +359,27 @@ public class SqlCteRefactor {
 		public String getOriginalQuery() { return originalQuery; }
 
 		public String getNewQuery() {
-			int firstFrom = originalQuery.toLowerCase().indexOf("from");
+		    
+		        int firstFrom = -1; // Initialize to -1, the same value indexOf() returns if not found
+
+			// The regex \bfrom\b finds the whole word "from", ignoring it if it's part of another word.
+			// Pattern.CASE_INSENSITIVE is used to match "from", "FROM", "From", etc.
+			Pattern pattern = Pattern.compile("\\bfrom\\b", Pattern.CASE_INSENSITIVE);
+			Matcher matcher = pattern.matcher(originalQuery);
+
+			// The find() method scans the input sequence looking for the first subsequence that matches the pattern.
+			if (matcher.find()) {
+			    // The start() method returns the start index of the previous match.
+			    firstFrom = matcher.start();
+			} else {
+			    logger.warn("SqlCteRefactor::createRefactorCriteria::getNewQuery WARNING: Something wierd is going on - there is no 'FROM' keyword used in this query.");
+			    return originalQuery;
+			}
+		    	
 			int endCrit = RENAME_TAG ? 
 				originalQuery.indexOf("-- XEnd") :	// TODO update for depth
 				originalQuery.indexOf("-- End"); // TODO why SQL with additional -- Begin / -- End tags breaks! fix.
+			
 			StringBuilder newSql = new StringBuilder(originalQuery.substring(0, firstFrom)).append("INTO ").append(name)
 				.append(NEW_LINE)
 				.append(originalQuery, firstFrom, endCrit)
