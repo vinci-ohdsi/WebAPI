@@ -1,10 +1,7 @@
 package org.ohdsi.sql;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.*;
-import org.springframework.stereotype.Component;
-
 
 /**
  * @author Marc A Suchard
@@ -54,9 +51,6 @@ public class SpringSqlRefactorConfig extends SqlRefactorConfig.Base {
 	}	
 	
 	public static void main(String[] args) {
-//		ApplicationContext ctx = new AnnotationConfigApplicationContext(SpringSqlRefactorConfig.class);
-//		SqlRefactorConfig config = ctx.getBean(SpringSqlRefactorConfig.class);
-//		myService.doStuff();		
 		SqlRefactorConfig config = new SpringSqlRefactorConfig();
 		System.out.printf(config.toString());
 	}

@@ -1,9 +1,13 @@
 package org.ohdsi.webapi.cohortdefinition;
 
+import static org.ohdsi.webapi.Constants.DEFAULT_DIALECT;
+import static org.ohdsi.webapi.Constants.CTE_REFACTOR;
+
 import org.apache.commons.lang3.StringUtils;
 
 import org.ohdsi.circe.cohortdefinition.CohortExpressionQueryBuilder;
 import org.ohdsi.circe.cohortdefinition.InclusionRule;
+import org.ohdsi.sql.SqlCteRefactor;
 import org.ohdsi.sql.SqlRender;
 import org.ohdsi.sql.SqlSplit;
 import org.ohdsi.sql.SqlTranslate;
@@ -11,6 +15,8 @@ import org.ohdsi.webapi.source.Source;
 import org.ohdsi.webapi.util.SourceUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -26,6 +32,9 @@ import static org.ohdsi.webapi.Constants.Tables.COHORT_SUMMARY_STATS_CACHE;
 
 public class CohortGenerationUtils {
 
+  // Create a logger instance for this class
+  private static final Logger logger = LoggerFactory.getLogger(CohortGenerationUtils.class);
+  
   public static void insertInclusionRules(CohortDefinition cohortDef, Source source, int designHash,
                                           String targetSchema, String sessionId, JdbcTemplate jdbcTemplate) {
     final String oracleTempSchema = SourceUtils.getTempQualifier(source);
@@ -89,6 +98,16 @@ public class CohortGenerationUtils {
       new String[]{request.getTargetSchema()}
     );
     String translatedSql = SqlTranslate.translateSql(renderedSql, source.getSourceDialect(), request.getSessionId(), oracleTempSchema);
+
+    if (DEFAULT_DIALECT.equals(source.getSourceDialect())) { // implies "sql server" is the dialect
+      if (CTE_REFACTOR.equals("true")) {
+	logger.info("CohortGenerationUtils::buildGenerationSql - translatedSQLprior to CTE Translation:\n" + translatedSql + "\n------------------------------------------------------------\n");
+	logger.info("CohortGenerationUtils::buildGenerationSql calling translateToCustomVaSql");
+	translatedSql = SqlCteRefactor.translateToCustomVaSql(translatedSql);
+	logger.info("CohortGenerationUtils::buildGenerationSql translateToCustomVaSql returned. New SQL:\n\n"
+		    + translatedSql + "\n\n");
+      }
+    }
     return SqlSplit.splitSql(translatedSql);
   }
 }
