@@ -356,9 +356,20 @@ public class NewSqlRefactor {
 		public String getName() { return name; }
 		
 		public String getOriginalQuery() { return originalQuery; }
+		
+		private static Pattern fromPattern = Pattern.compile("from\\s");
+			
+		private int indexOfFirstFrom(String string) {
+			Matcher matcher = fromPattern.matcher(string);
+			if (matcher.find()) {
+				return matcher.start();
+			} else {
+				return -1;
+			}
+		}
 
 		public String getNewQuery() {
-			int firstFrom = originalQuery.toLowerCase().indexOf("from");
+			int firstFrom = indexOfFirstFrom(originalQuery.toLowerCase());
 			int endCrit = RENAME_TAG ? 
 				originalQuery.indexOf("-- XEnd") :	// TODO update for depth
 				originalQuery.indexOf("-- End"); // TODO why SQL with additional -- Begin / -- End tags breaks! fix.
