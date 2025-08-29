@@ -133,7 +133,7 @@ public class GenerateCohortTasklet extends CancelableTasklet implements Stoppabl
       final Integer sourceId = Integer.valueOf(jobParams.get(SOURCE_ID).toString());
       final Source source = sourceService.findBySourceId(sourceId);
 
-      final String cohortTable = jobParams.get(TARGET_TABLE).toString();
+      final String cohortTable = String.format("%s.%s", SourceUtils.getTempQualifier(source), jobParams.get(TARGET_TABLE).toString());
       final String sessionId = jobParams.get(SESSION_ID).toString();
 
       final String tempSchema = SourceUtils.getTempQualifier(source);
@@ -172,13 +172,6 @@ public class GenerateCohortTasklet extends CancelableTasklet implements Stoppabl
       if (ImmutableList.of(DBMSType.MS_SQL_SERVER.getOhdsiDB(), DBMSType.PDW.getOhdsiDB())
               .contains(source.getSourceDialect())) {
           sql = sql.replaceAll("#", tempSchema + "." + sessionId + "_").replaceAll("tempdb\\.\\.", "");
-      }
-      if (source.getSourceDialect().equals("spark")) {
-          try {
-              sql = BigQuerySparkTranslate.sparkHandleInsert(sql, source.getSourceConnection());
-          } catch (SQLException e) {
-              e.printStackTrace();
-          }
       }
 
       final String translatedSql = SqlTranslate.translateSql(sql, source.getSourceDialect(), sessionId, tempSchema);
