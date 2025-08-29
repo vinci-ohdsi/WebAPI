@@ -28,7 +28,6 @@
 
     <commons-fileupload.version>1.5</commons-fileupload.version>
 
-    <!-- <circe.version>1.12.1</circe.version> -->
     <circe.version>1.13.1</circe.version>
     <jersey.version>2.14</jersey.version>
     <SqlRender.version>1.19.1</SqlRender.version>
@@ -312,6 +311,17 @@
 
     <!-- Shiny -->
     <shiny.enabled>false</shiny.enabled>
+
+    <!-- SQL refactoring settings -->
+    <!-- if vinci.cteRefactor is set to true then, the CTEs used
+         in Circe-Be cohort definition SQL will be converted to
+         temporary tables that are column-store indexed -->
+    <vinci.cteRefactor>false</vinci.cteRefactor>
+    <vinci.refactorDomainCriteria>true</vinci.refactorDomainCriteria>
+    <vinci.refactorNestedCriteria>true</vinci.refactorNestedCriteria>
+    <vinci.refactorPrimaryEvents>true</vinci.refactorPrimaryEvents>
+    <vinci.addIndicesToDomainCriteria>false</vinci.addIndicesToDomainCriteria>
+    <vinci.addIndicesToNestedCriteria>false</vinci.addIndicesToNestedCriteria>
   </properties>
 
   <build>
@@ -1336,6 +1346,11 @@
         <security.db.datasource.password>${datasource.password}</security.db.datasource.password>
         <security.db.datasource.authenticationQuery>select password from ${security.db.datasource.schema}.users_data where \
           lower(email) = lower(?)</security.db.datasource.authenticationQuery>
+	<vinci.refactorDomainCriteria>true</vinci.refactorDomainCriteria>
+        <vinci.refactorNestedCriteria>true</vinci.refactorNestedCriteria>
+        <vinci.refactorPrimaryEvents>true</vinci.refactorPrimaryEvents>
+        <vinci.addIndicesToDomainCriteria>false</vinci.addIndicesToDomainCriteria>
+        <vinci.addIndicesToNestedCriteria>false</vinci.addIndicesToNestedCriteria>
       </properties>
     </profile>
     <profile>
@@ -1405,7 +1420,7 @@
         <security.db.datasource.username>${datasource.username}</security.db.datasource.username>
         <security.db.datasource.password>${datasource.password}</security.db.datasource.password>
         <security.db.datasource.authenticationQuery>select password from ${security.db.datasource.schema}.user where \
-          lower(email) = lower(?)</security.db.datasource.authenticationQuery>
+        lower(email) = lower(?)</security.db.datasource.authenticationQuery>
       </properties>
     </profile>
     <profile>

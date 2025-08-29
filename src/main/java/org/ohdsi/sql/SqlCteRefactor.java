@@ -1,13 +1,12 @@
 package org.ohdsi.sql;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.*;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 
 /**
  * @author Marc A Suchard
@@ -15,161 +14,322 @@ import org.slf4j.LoggerFactory;
  * @author Bhavani Tirupati
  */
 
+@SuppressWarnings("Duplicates")
 public class SqlCteRefactor {
-        private static final Logger logger = LoggerFactory.getLogger(SqlCteRefactor.class);
+	
+	private static final Logger logger = LoggerFactory.getLogger(SqlCteRefactor.class);
 
 	private static final String NEW_LINE = System.lineSeparator();
-	private static final String POST_APPEND = NEW_LINE + "-- Refactored by SqlCteRefactor" + NEW_LINE;
+	private static final boolean RENAME_TAG = true;
+	private static final boolean USE_DEPTH = false;
+	private static final boolean ADD_LINE_NUMBERS = true;
+	
+	private final String originalSql;
+	private final SqlRefactorConfig config;
+	private String refactoredSql;
+	
+	private final List<TempTable> uniqueTables = new ArrayList<>();
+	
+	public SqlCteRefactor(String sql, SqlRefactorConfig config) {
+		this.originalSql = sql;
+		this.config = config;
+	}
+	
+	public String getRefactoredSql() {
+		if (refactoredSql == null) {
+			try {
+				refactoredSql = processSql();
+			} catch (Exception e) {
+				logger.error("SqlCteRefactor::processSql error: " + e.getMessage());
+				return originalSql;
+			}
+		}
+		return refactoredSql;
+	}
 
+	@SuppressWarnings("unused")
 	public static String translateToCustomVaSql(String sql) {
+		return translateToCustomVaSql(sql, new RSqlRefactorConfig());
+	}
 
-	        logger.info("SqlCteRefactor::translateToCustomVaSql entering method.");
-	        
-		List<DomainCriteria> domainCriteriaList = createDomainCriteria();
-		List<SqlLocation> locations = new ArrayList<>();
+	public static String translateToCustomVaSql(String sql, SqlRefactorConfig config) {
+		SqlCteRefactor refactor = new SqlCteRefactor(sql, config);
+		return refactor.getRefactoredSql();
+	}
+	
+	private String processSql() {
 
-		// Identify the locations of domain criteria sub-queries in the SQL
-		for (DomainCriteria criteria : domainCriteriaList) {
-
-			List<Integer> startLocs = findMatches(sql, criteria.getBeginningPattern());
-			List<Integer> endLocs = findMatches(sql, criteria.getEndingPattern());
-
-			for (int i = 0; i < startLocs.size(); i++) {
-				int start = startLocs.get(i);
-				int end = endLocs.get(i) + criteria.getEndingPattern().length();
-				locations.add(new SqlLocation(criteria.getDomain(),
-					start, end,
-					sql.substring(start, end)
-				));
+		logger.info("SqlCteRefactor::processSql entering method.");
+		
+		StringBuilder sb = new StringBuilder();
+		
+		// Split into execution lines and process
+		String[] lines = originalSql.split(";");
+		for (int i = 0; i < lines.length; ++i) {
+			String line = stripWhiteSpaces(lines[i]);
+			if (!line.equals("")) {
+				String result = processLine(line, i);
+				sb.append(result);
 			}
 		}
 
-		if (locations.isEmpty()) {
-			return sql + POST_APPEND;
+		// Delete temp tables at end
+		for (TempTable table : uniqueTables) {
+			sb.append(NEW_LINE);
+			sb.append("TRUNCATE TABLE ").append(table.getName()).append(";").append(NEW_LINE)
+				.append("DROP TABLE ").append(table.getName()).append(";").append(NEW_LINE);
+		}
+
+		return sb.toString();
+	}
+	
+	private String processLine(String line, int number) {
+		
+		String lineNumber = "(" + (number + 1) + ")";
+		line = line + ";";
+		
+		Result result = new Result(line, Status.INCOMPLETE);
+		while (result.status == Status.INCOMPLETE) {
+			result = iterate(result);
+		}
+		
+		StringBuilder sb = new StringBuilder();
+		
+		if (result.header.length() > 0) {
+			if (ADD_LINE_NUMBERS) {
+				sb.append("-- temp-table start ").append(lineNumber).append(NEW_LINE);
+			}
+			sb.append(result.header).append(NEW_LINE);
+			if (ADD_LINE_NUMBERS) {
+				sb.append("-- temp-table end ").append(lineNumber).append(NEW_LINE);
+			}
+		}
+		
+		if (ADD_LINE_NUMBERS) {
+			sb.append("-- execution start ").append(lineNumber).append(NEW_LINE);
+		}
+		sb.append(result.sql).append(NEW_LINE);
+		if (ADD_LINE_NUMBERS) {
+			sb.append("-- execution end ").append(lineNumber).append(NEW_LINE);
+		}
+		
+		return sb.toString();
+	}
+	
+	private String stripWhiteSpaces(String line) {
+		line = line.replaceAll("^\\s+", "");
+		line = line.replaceAll("\\s+$", "");
+		return line;
+	}
+	
+	enum Status {
+		DONE,
+		INCOMPLETE
+	}
+	
+	private static class Result {
+		final String sql;
+		final Status status;
+		final String header;
+		
+		Result(String sql, Status status) {
+			this(sql, "", status);
+		}
+		
+		Result(String sql, String header, Status status) {
+			this.sql = sql;
+			this.header = header;
+			this.status = status;
+		}
+	}
+	
+	private Result iterate(Result result) {
+		
+		String sql = result.sql;
+		StringBuilder header = new StringBuilder(result.header);
+		
+		List<LocationType> allMatches = new ArrayList<>();
+		
+		for (MatchCriteria criteria : createRefactorCriteria()) {
+			
+			allMatches.addAll(findMatches(sql, criteria, LocationType.Type.BEGIN));
+			allMatches.addAll(findMatches(sql, criteria, LocationType.Type.END));
+
+		}
+		
+		allMatches.sort(Comparator.comparingInt(LocationType::getLocation));
+		
+		List<SqlLocation> locations = new ArrayList<>();
+		
+		int depth = 0;
+		
+		for (int i = 0; i < allMatches.size() - 1; ++i) {
+			LocationType current = allMatches.get(i);
+		
+			if (current.getType() == LocationType.Type.BEGIN) {
+				++depth;
+				
+				// Pick only tips
+				LocationType next = allMatches.get(i + 1);
+				if (next.getType() == LocationType.Type.END) {
+					int start = current.getLocation();
+					int end = next.getLocation() + next.getCriterion().getEndingPattern().length();
+
+					locations.add(new SqlLocation(current.getCriterion().getCriteriaName(),
+						start, end,
+						sql.substring(start, end), depth
+					));
+				}				
+			} else { // is END
+				--depth;
+			}
+		}
+		
+		if (locations.size() == 0) {
+			return new Result(sql, header.toString(), Status.DONE);
 		}
 
 		locations.sort(Comparator.comparingInt(SqlLocation::getStart));
+		addUniqueTables(locations);
 		
-		List<TempTable> uniqueTables = buildUniqueTables(locations);
-		
-		// Add in new temporary tables
-		int firstConceptSetEnd = sql.indexOf(";", sql.indexOf(";") + 1) + 1; // Find 2nd ";"
-
-		String firstSqlSegment = sql.substring(0, firstConceptSetEnd);
-
-		StringBuilder newSql = new StringBuilder(firstSqlSegment)
-			.append(NEW_LINE).append(" CREATE CLUSTERED COLUMNSTORE INDEX idx ON #Codesets;");
-
 		for (TempTable table : uniqueTables) {
-			newSql.append(NEW_LINE).append(table.getNewQuery());
-		}
-		newSql.append(NEW_LINE);
-		int currentStart = firstConceptSetEnd;
-		for (int i = 0; i < locations.size(); ++i) {
-			SqlLocation loc = locations.get(i);
-			String replaceQuery = "SELECT * FROM " + loc.getName();
-
-			newSql.append(sql, currentStart, loc.getStart()).append(replaceQuery);
-
-			if (i < locations.size() - 1) {
-				newSql.append(NEW_LINE); // TODO VaTools output is inconsistent
+			if (!table.isComplete()) {
+				header.append(table.getNewQuery()).append(NEW_LINE);
+				table.markComplete();
 			}
+		}
 
+		StringBuilder newSql = new StringBuilder();
+		replaceOriginalWithTempTables(sql, locations, newSql);
+		
+		return new Result(newSql.toString(), header.toString(), Status.INCOMPLETE);
+	}
+
+	private void replaceOriginalWithTempTables(String sql,
+																						 List<SqlLocation> locations,	
+																						 StringBuilder newSql) {
+		int currentStart = 0;
+		for (SqlLocation loc : locations) {
+			String replaceQuery = "SELECT * FROM " + loc.getName();
+			newSql.append(sql, currentStart, loc.getStart()).append(replaceQuery);
 			currentStart = loc.getEnd();
 		}
 
 		newSql.append(sql.substring(currentStart));
-
-		// Delete tables at end
-		newSql.append(" "); // TODO VaTools output is inconsistent
-
-		newSql.append(NEW_LINE).append("-- DELETE TEMP TABLES");
-
-		boolean first = true;
-		for (TempTable table : uniqueTables) {
-			newSql.append(NEW_LINE);
-
-			if (first) {
-				newSql.append(" "); // TODO VaTools output is inconsistent
-				first = false;
-			}
-
-			newSql.append("TRUNCATE TABLE ").append(table.getName()).append(";").append(NEW_LINE)
-				.append("DROP TABLE ").append(table.getName()).append(";").append(NEW_LINE);
-		}
-		
-		return newSql + POST_APPEND;
 	}
-
-	private static List<TempTable> buildUniqueTables(List<SqlLocation> locations) {
-
-		Map<String, String> mapQueryToPartialName = new HashMap<>();
-		Map<String, Integer> mapPartialNameToCount = new HashMap<>();
-
-		List<TempTable> uniqueTables = new ArrayList<>();
-
-		// Generate temporary table names based on extracted queries
-
+	
+	private void addUniqueTables(List<SqlLocation> locations) {
+		
 		for (SqlLocation loc : locations) {
-			Matcher matcher = Pattern.compile("codeset_id =\\s*(\\d+)").matcher(loc.getQuery());
-			String codeSetId = matcher.find() ? matcher.group(1) : "X";
-			String tableSubName = "#" + loc.getDomain() + "Crit" + codeSetId;
-			String name;
-			if (!mapQueryToPartialName.containsKey(loc.getQuery())) {
-				if (mapPartialNameToCount.containsKey(tableSubName)) {
-					Integer count = mapPartialNameToCount.get(tableSubName);
-					count++;
-					mapPartialNameToCount.put(tableSubName, count); // replace value in hash-map (fix)
-					name = tableSubName + "_" + count;
-				} else {
-					mapPartialNameToCount.put(tableSubName, 1);
-					name = tableSubName + "_" + 1;
-				}
-				mapQueryToPartialName.put(loc.getQuery(), name); // remember to cache all unique queries (fix)
-				uniqueTables.add(new TempTable(name, loc.getQuery()));
+			TempTable table = find(uniqueTables, loc.getQuery());
+			final String name;
+			if (table == null) {
+				String tableName = "#" + loc.getDomain() + "Crit" + uniqueTables.size();
+				uniqueTables.add(new TempTable(tableName, loc.getQuery(), config.getAddIndicesToNestedCriteria()));
+				name = tableName;
 			} else {
-				name = mapQueryToPartialName.get(loc.getQuery());
+				name = table.getName();
 			}
 			loc.setName(name);
 		}
-		return uniqueTables;
 	}
 	
-	private static List<Integer> findMatches(String sql, String pattern) {
-		List<Integer> positions = new ArrayList<>();
+	private static TempTable find(List<TempTable> tables, String sql) {
+		for (TempTable table : tables) {
+			if (sql.equalsIgnoreCase(table.getOriginalQuery())) {
+				return table;
+			}
+		}
+		return null;
+	}
+	
+	private static class LocationType {
+		
+		enum Type {
+			BEGIN {
+				@Override
+				String getPattern(MatchCriteria criterion) {
+					return criterion.getBeginningPattern();
+				}
+			},
+			END {
+				@Override
+				String getPattern(MatchCriteria criterion) {
+					return criterion.getEndingPattern();
+				}
+			};
+			
+			abstract String getPattern(MatchCriteria criterion);
+		}
+		
+		private final int location;
+		private final MatchCriteria criterion;
+		private final int depth;
+		private final Type type;
+		
+		LocationType(int location, MatchCriteria criterion, Type type) {
+			this(location, criterion, type, -1);
+		}
+		
+		LocationType(int location, MatchCriteria criterion, Type type, int depth) {
+			this.location = location;
+			this.criterion = criterion;
+			this.depth = depth;
+			this.type = type;
+		}
+		
+		public int getLocation() { return location; }
+		
+		public MatchCriteria getCriterion() { return criterion; }
+		
+		@SuppressWarnings("unused")
+		public int getDepth() { return depth; }
+
+		public Type getType() { return type; }
+	}
+	
+	private static List<LocationType> findMatches(String sql, MatchCriteria criterion, LocationType.Type type) {
+		String pattern = type.getPattern(criterion);
+		List<LocationType> positions = new ArrayList<>();
 		Matcher matcher = Pattern.compile(pattern).matcher(sql);
 		while (matcher.find()) {
-			positions.add(matcher.start());
+			positions.add(new LocationType(matcher.start(), criterion, type));
 		}
 		return positions;
 	}
-
-	private static List<DomainCriteria> createDomainCriteria() {
+	
+	private static List<MatchCriteria> createRefactorCriteria() {
 		return Arrays.asList(
-			new DomainCriteria("Measurement", "-- Begin Measurement Criteria", "-- End Measurement Criteria"),
-			new DomainCriteria("Condition", "-- Begin Condition Occurrence Criteria", "-- End Condition Occurrence Criteria"),
-			new DomainCriteria("Drug", "-- Begin Drug Exposure Criteria", "-- End Drug Exposure Criteria"),
-			new DomainCriteria("Visit", "-- Begin Visit Occurrence Criteria", "-- End Visit Occurrence Criteria"),
-			new DomainCriteria("Device", "-- Begin Device Exposure Criteria", "-- End Device Exposure Criteria"),
-			new DomainCriteria("Observation", "-- Begin Observation Criteria", "-- End Observation Criteria"),
-			new DomainCriteria("Procedure", "-- Begin Procedure Occurrence Criteria", "-- End Procedure Occurrence Criteria")
+			new MatchCriteria("PrimaryEvents", "-- Begin Primary Events", "-- End Primary Events"),
+			new MatchCriteria("CorrelatedCriteria", "-- Begin Correlated Criteria", "-- End Correlated Criteria"),
+			new MatchCriteria("CriteriaGroup", "-- Begin Criteria Group", "-- End Criteria Group"),
+			new MatchCriteria("Measurement", "-- Begin Measurement Criteria", "-- End Measurement Criteria"),
+			new MatchCriteria("Condition", "-- Begin Condition Occurrence Criteria", "-- End Condition Occurrence Criteria"),
+			new MatchCriteria("ConditionEra", "-- Begin Condition Era Criteria", "-- End Condition Era Criteria"),
+			new MatchCriteria("Drug", "-- Begin Drug Exposure Criteria", "-- End Drug Exposure Criteria"),
+			new MatchCriteria("DrugEra", "-- Begin Drug Era Criteria", "-- End Drug Era Criteria"),
+			new MatchCriteria("Visit", "-- Begin Visit Occurrence Criteria", "-- End Visit Occurrence Criteria"),
+			new MatchCriteria("Device", "-- Begin Device Exposure Criteria", "-- End Device Exposure Criteria"),
+			new MatchCriteria("Observation", "-- Begin Observation Criteria", "-- End Observation Criteria"),
+			new MatchCriteria("Procedure", "-- Begin Procedure Occurrence Criteria",  "-- End Procedure Occurrence Criteria"),
+			new MatchCriteria("Specimen", "-- Begin Specimen Criteria", "-- End Specimen Criteria"),
+			new MatchCriteria("Location", "-- Begin Location region Criteria", "-- End Location region Criteria"),
+			new MatchCriteria("Demographics", "-- Begin Demographic Criteria", "-- End Demographic Criteria")
 		);
 	}
-
-	private static class DomainCriteria {
-		private final String domain;
+	
+	private static class MatchCriteria {
+		private final String name;
 		private final String beginningPattern;
 		private final String endingPattern;
 
-		public DomainCriteria(String domain, String beginningPattern, String endingPattern) {
-			this.domain = domain;
+		public MatchCriteria(String name, String beginningPattern, String endingPattern) {
+			this.name = name;
 			this.beginningPattern = beginningPattern;
 			this.endingPattern = endingPattern;
 		}
 
-		public String getDomain() {
-			return domain;
-		}
+		public String getCriteriaName() { return name; }
 
 		public String getBeginningPattern() {
 			return beginningPattern;
@@ -183,24 +343,56 @@ public class SqlCteRefactor {
 	private static class TempTable {
 		private final String name;
 		private final String originalQuery;
+		private final boolean addIndices;
+		private boolean complete;
 
-		public TempTable(String name, String originalQuery) {
+		public TempTable(String name, String originalQuery, boolean addIndices) {
 			this.name = name;
 			this.originalQuery = originalQuery;
+			this.complete = false;
+			this.addIndices = addIndices;
 		}
 		
 		public String getName() { return name; }
+		
+		public String getOriginalQuery() { return originalQuery; }
 
 		public String getNewQuery() {
-			int firstFrom = originalQuery.toLowerCase().indexOf("from");
-			int endCrit = originalQuery.indexOf("-- End");
-			return originalQuery.substring(0, firstFrom) +
-				"INTO " + name + NEW_LINE +
-				originalQuery.substring(firstFrom, endCrit) +
-				";" + NEW_LINE + " CREATE CLUSTERED COLUMNSTORE INDEX idx ON " +
-				name + ";" + NEW_LINE +
-				originalQuery.substring(endCrit);
+		    
+		        int firstFrom = -1; // Initialize to -1, the same value indexOf() returns if not found
+
+			// The regex \bfrom\b finds the whole word "from", ignoring it if it's part of another word.
+			// Pattern.CASE_INSENSITIVE is used to match "from", "FROM", "From", etc.
+			Pattern pattern = Pattern.compile("\\bfrom\\b", Pattern.CASE_INSENSITIVE);
+			Matcher matcher = pattern.matcher(originalQuery);
+
+			// The find() method scans the input sequence looking for the first subsequence that matches the pattern.
+			if (matcher.find()) {
+			    // The start() method returns the start index of the previous match.
+			    firstFrom = matcher.start();
+			} else {
+			    logger.warn("SqlCteRefactor::createRefactorCriteria::getNewQuery WARNING: Something wierd is going on - there is no 'FROM' keyword used in this query.");
+			    return originalQuery;
+			}
+		    	
+			int endCrit = RENAME_TAG ? 
+				originalQuery.indexOf("-- XEnd") :	// TODO update for depth
+				originalQuery.indexOf("-- End"); // TODO why SQL with additional -- Begin / -- End tags breaks! fix.
+			
+			StringBuilder newSql = new StringBuilder(originalQuery.substring(0, firstFrom)).append("INTO ").append(name)
+				.append(NEW_LINE)
+				.append(originalQuery, firstFrom, endCrit)
+				.append(";").append(NEW_LINE);
+			if (addIndices) {
+				newSql.append("CREATE CLUSTERED COLUMNSTORE INDEX idx ON ").append(name).append(";").append(NEW_LINE);
+			}
+			newSql.append(originalQuery.substring(endCrit));
+			return newSql.toString();
 		}
+		
+		public boolean isComplete() { return complete; }
+		
+		public void markComplete() { complete = true; }
 	}
 
 	private static class SqlLocation {
@@ -208,13 +400,31 @@ public class SqlCteRefactor {
 		private final int start;
 		private final int end;
 		private final String query;
+		private final int depth;
 
 		private String name;
-
-		public SqlLocation(String domain, int start, int end, String query) {
+		
+		public SqlLocation(String domain, int start, int end, String query, int depth) {
 			this.domain = domain;
 			this.start = start;
 			this.end = end;
+			this.depth = depth;
+			
+			if (RENAME_TAG) {
+				String tag = "X";
+				if (USE_DEPTH) {
+					if (depth > 0) {
+						StringBuilder sb = new StringBuilder(depth);
+						for (int i = 0; i < depth; ++i) {
+							sb.append("Y");
+						}
+						tag = sb.toString();
+					}
+				}
+				query = query.replaceAll("Begin",   tag + "Begin");
+				query = query.replaceAll("End",   tag + "End");
+			}
+			
 			this.query = query;
 		}
 
@@ -242,12 +452,15 @@ public class SqlCteRefactor {
 		public String getQuery() {
 			return query;
 		}
+		
+		@SuppressWarnings("unused")
+		public int getDepth() { return depth; }
 	}
 
 	public static void main(String[] args) {
 
 		if (args.length != 2) {
-			System.out.println("Please provide an input filename and an output filename.");
+			System.out.println("Please provide an input filename and output filename.");
 			return;
 		}
 
@@ -267,12 +480,16 @@ public class SqlCteRefactor {
 			System.err.println("An error occurred while reading the file: " + e.getMessage());
 			return;
 		}
+		
+		SqlRefactorConfig config = new RSqlRefactorConfig();
 
 		String oldSql = contentBuilder.toString();
-		String newSql = translateToCustomVaSql(oldSql);
+		
+		SqlCteRefactor refactor = new SqlCteRefactor(oldSql, config);
+		String refactoredSql = refactor.getRefactoredSql();
 
 		try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFileName))) {
-			writer.write(newSql);
+			writer.write(refactoredSql);
 		} catch (IOException e) {
 			System.err.println("An error occurred while writing to the file: " + e.getMessage());
 		}

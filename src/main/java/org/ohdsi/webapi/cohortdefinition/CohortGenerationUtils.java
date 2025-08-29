@@ -1,6 +1,7 @@
 package org.ohdsi.webapi.cohortdefinition;
 
 import static org.ohdsi.webapi.Constants.DEFAULT_DIALECT;
+import static org.ohdsi.webapi.Constants.CTE_REFACTOR;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -33,16 +34,9 @@ import static org.ohdsi.webapi.Constants.Tables.COHORT_INCLUSION_STATS_CACHE;
 import static org.ohdsi.webapi.Constants.Tables.COHORT_SUMMARY_STATS_CACHE;
 
 public class CohortGenerationUtils {
+
   // Create a logger instance for this class
   private static final Logger logger = LoggerFactory.getLogger(CohortGenerationUtils.class);
-
-  @Value("${generation.cteRefactor}")
-  private boolean cteRefactor;
-  private static boolean staticCteRefactor;
-  @PostConstruct
-  public void init() { // necessary b/c the method where this will be used is static
-    staticCteRefactor = cteRefactor;
-  }
   
   public static void insertInclusionRules(CohortDefinition cohortDef, Source source, int designHash,
                                           String targetSchema, String sessionId, JdbcTemplate jdbcTemplate) {
@@ -109,11 +103,12 @@ public class CohortGenerationUtils {
     String translatedSql = SqlTranslate.translateSql(renderedSql, source.getSourceDialect(), request.getSessionId(), oracleTempSchema);
 
     if (DEFAULT_DIALECT.equals(source.getSourceDialect())) { // implies "sql server" is the dialect
-      if (staticCteRefactor) {
-	logger.info("CohortGenerationUtils::buildGenerationSql - translatedSQLprior to CTE Translation:\n" + translatedSql + "\n------------------------------------------------------------\n");
-	logger.info("CohortGenerationUtils::buildGenerationSql calling translateToCustomVaSql");
-	translatedSql = SqlCteRefactor.translateToCustomVaSql(translatedSql);
-	logger.info("CohortGenerationUtils::buildGenerationSql translateToCustomVaSql returned. New SQL:\n\n"
+      if (CTE_REFACTOR.equals("true")) {
+
+	      logger.info("CohortGenerationUtils::buildGenerationSql - translatedSQLprior to CTE Translation:\n" + translatedSql + "\n------------------------------------------------------------\n");
+	      logger.info("CohortGenerationUtils::buildGenerationSql calling translateToCustomVaSql");
+	      translatedSql = SqlCteRefactor.translateToCustomVaSql(translatedSql);
+	      logger.info("CohortGenerationUtils::buildGenerationSql translateToCustomVaSql returned. New SQL:\n\n"
 		    + translatedSql + "\n\n");
       }
     }
