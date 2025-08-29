@@ -15,6 +15,9 @@ import org.ohdsi.webapi.source.Source;
 import org.ohdsi.webapi.util.SourceUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import javax.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,7 +74,7 @@ public class CohortGenerationUtils {
 
     final String oracleTempSchema = SourceUtils.getTempQualifier(source);
 
-    String expressionSql = expressionQueryBuilder.buildExpressionQuery(request.getExpression(), options);
+    String expressionSql = expressionQueryBuilder.buildExpressionQuery(request.getExpression(), options);    
     expressionSql = SqlRender.renderSql(
       expressionSql,
       new String[] {"target_cohort_table", 
@@ -101,10 +104,11 @@ public class CohortGenerationUtils {
 
     if (DEFAULT_DIALECT.equals(source.getSourceDialect())) { // implies "sql server" is the dialect
       if (CTE_REFACTOR.equals("true")) {
-	logger.info("CohortGenerationUtils::buildGenerationSql - translatedSQLprior to CTE Translation:\n" + translatedSql + "\n------------------------------------------------------------\n");
-	logger.info("CohortGenerationUtils::buildGenerationSql calling translateToCustomVaSql");
-	translatedSql = SqlCteRefactor.translateToCustomVaSql(translatedSql);
-	logger.info("CohortGenerationUtils::buildGenerationSql translateToCustomVaSql returned. New SQL:\n\n"
+
+	      logger.info("CohortGenerationUtils::buildGenerationSql - translatedSQLprior to CTE Translation:\n" + translatedSql + "\n------------------------------------------------------------\n");
+	      logger.info("CohortGenerationUtils::buildGenerationSql calling translateToCustomVaSql");
+	      translatedSql = SqlCteRefactor.translateToCustomVaSql(translatedSql);
+	      logger.info("CohortGenerationUtils::buildGenerationSql translateToCustomVaSql returned. New SQL:\n\n"
 		    + translatedSql + "\n\n");
       }
     }

@@ -193,6 +193,11 @@
     <!-- read permissions to -->
     <security.defaultGlobalReadPermissions>true</security.defaultGlobalReadPermissions>
 
+    <!-- if generation.cteRefactor is set to true then, the CTEs used
+         in Circe-Be cohort definition SQL will be converted to
+         temporary tables that are column-store indexed -->
+    <generation.cteRefactor>false</generation.cteRefactor>
+    
     <!-- EMBEDDED SERVER CONFIGURATION (ServerProperties) -->
     <server.port>8080</server.port>
     <server.ssl.key-store></server.ssl.key-store>
