@@ -1,5 +1,6 @@
 package org.ohdsi.sql;
 
+import org.ohdsi.webapi.estimation.comparativecohortanalysis.specification.MatchOnPsAndCovariatesArgsImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -206,8 +207,8 @@ public class SqlCteRefactor {
 	}
 
 	private void replaceOriginalWithTempTables(String sql,
-																						 List<SqlLocation> locations,	
-																						 StringBuilder newSql) {
+	  			                   List<SqlLocation> locations,	
+						   StringBuilder newSql) {
 		int currentStart = 0;
 		for (SqlLocation loc : locations) {
 			String replaceQuery = "SELECT * FROM " + loc.getName();
@@ -300,21 +301,23 @@ public class SqlCteRefactor {
 	
 	private static List<MatchCriteria> createRefactorCriteria() {
 		return Arrays.asList(
-			new MatchCriteria("PrimaryEvents", "-- Begin Primary Events", "-- End Primary Events"),
-			new MatchCriteria("CorrelatedCriteria", "-- Begin Correlated Criteria", "-- End Correlated Criteria"),
-			new MatchCriteria("CriteriaGroup", "-- Begin Criteria Group", "-- End Criteria Group"),
-			new MatchCriteria("Measurement", "-- Begin Measurement Criteria", "-- End Measurement Criteria"),
+			new MatchCriteria("CareSite", "-- Begin Care Site Criteria","-- End Care Site Criteria"),
 			new MatchCriteria("Condition", "-- Begin Condition Occurrence Criteria", "-- End Condition Occurrence Criteria"),
 			new MatchCriteria("ConditionEra", "-- Begin Condition Era Criteria", "-- End Condition Era Criteria"),
+			new MatchCriteria("CorrelatedCriteria", "-- Begin Correlated Criteria", "-- End Correlated Criteria"),
+			new MatchCriteria("CriteriaGroup", "-- Begin Criteria Group", "-- End Criteria Group"),
+			new MatchCriteria("Demographics", "-- Begin Demographic Criteria", "-- End Demographic Criteria"),
+			new MatchCriteria("Device", "-- Begin Device Exposure Criteria", "-- End Device Exposure Criteria"),
 			new MatchCriteria("Drug", "-- Begin Drug Exposure Criteria", "-- End Drug Exposure Criteria"),
 			new MatchCriteria("DrugEra", "-- Begin Drug Era Criteria", "-- End Drug Era Criteria"),
-			new MatchCriteria("Visit", "-- Begin Visit Occurrence Criteria", "-- End Visit Occurrence Criteria"),
-			new MatchCriteria("Device", "-- Begin Device Exposure Criteria", "-- End Device Exposure Criteria"),
+			new MatchCriteria("Location", "-- Begin Location region Criteria", "-- End Location region Criteria"),
+			new MatchCriteria("Measurement", "-- Begin Measurement Criteria", "-- End Measurement Criteria"),
 			new MatchCriteria("Observation", "-- Begin Observation Criteria", "-- End Observation Criteria"),
+			new MatchCriteria("PrimaryEvents", "-- Begin Primary Events", "-- End Primary Events"),
 			new MatchCriteria("Procedure", "-- Begin Procedure Occurrence Criteria",  "-- End Procedure Occurrence Criteria"),
 			new MatchCriteria("Specimen", "-- Begin Specimen Criteria", "-- End Specimen Criteria"),
-			new MatchCriteria("Location", "-- Begin Location region Criteria", "-- End Location region Criteria"),
-			new MatchCriteria("Demographics", "-- Begin Demographic Criteria", "-- End Demographic Criteria")
+			new MatchCriteria("Visit", "-- Begin Visit Occurrence Criteria", "-- End Visit Occurrence Criteria"),
+			new MatchCriteria("VisitDetail", "-- Begin Visit Detail Criteria", "-- End Visit Detail Criteria")
 		);
 	}
 	
